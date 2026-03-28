@@ -43,7 +43,7 @@ class Hyperparameters:
     max_wallclock_seconds = float(os.environ.get("MAX_WALLCLOCK_SECONDS", 600.0))
     qk_gain_init = float(os.environ.get("QK_GAIN_INIT", 1.5))
     vocab_size = int(os.environ.get("VOCAB_SIZE", 1024))
-    num_layers = int(os.environ.get("NUM_LAYERS", 12))
+    num_layers = int(os.environ.get("NUM_LAYERS", 11))
     num_kv_heads = int(os.environ.get("NUM_KV_HEADS", 4))
     model_dim = int(os.environ.get("MODEL_DIM", 512))
     num_heads = int(os.environ.get("NUM_HEADS", 8))
@@ -62,12 +62,13 @@ class Hyperparameters:
     muon_momentum_warmup_start = float(os.environ.get("MUON_MOMENTUM_WARMUP_START", 0.92))
     muon_momentum_warmup_steps = int(os.environ.get("MUON_MOMENTUM_WARMUP_STEPS", 1500))
     gptq_actorder = bool(int(os.environ.get("GPTQ_ACTORDER", "1")))
-    gptq_calib_samples = int(os.environ.get("GPTQ_CALIB_SAMPLES", "128"))
+    gptq_calib_samples = int(os.environ.get("GPTQ_CALIB_SAMPLES", "256"))
+    gptq_block_size = int(os.environ.get("GPTQ_BLOCK_SIZE", "256"))
     beta1 = float(os.environ.get("BETA1", 0.9))
     beta2 = float(os.environ.get("BETA2", 0.95))
     adam_eps = float(os.environ.get("ADAM_EPS", 1e-8))
     grad_clip_norm = float(os.environ.get("GRAD_CLIP_NORM", 0.3))
-    eval_stride = int(os.environ.get("EVAL_STRIDE", 64))
+    eval_stride = int(os.environ.get("EVAL_STRIDE", 32))
     max_eval_wallclock_seconds = float(os.environ.get("MAX_EVAL_WALLCLOCK_SECONDS", 580.0))
     mtp_num_heads = int(os.environ.get("MTP_NUM_HEADS", 0))
     mtp_loss_weight = float(os.environ.get("MTP_LOSS_WEIGHT", 0.2))
@@ -89,11 +90,11 @@ class Hyperparameters:
     late_qat_threshold = float(os.environ.get("LATE_QAT_THRESHOLD", 0.15))
     ve_enabled = bool(int(os.environ.get("VE_ENABLED", "1")))
     ve_dim = int(os.environ.get("VE_DIM", 128))
-    ve_layers = os.environ.get("VE_LAYERS", "10,11")
+    ve_layers = os.environ.get("VE_LAYERS", "9,10")
     gated_attention = bool(int(os.environ.get("GATED_ATTENTION", "0")))
     value_residual = bool(int(os.environ.get("VALUE_RESIDUAL", "0")))
     ttt_enabled = bool(int(os.environ.get("TTT_ENABLED", "1")))
-    ttt_lr = float(os.environ.get("TTT_LR", 0.001))
+    ttt_lr = float(os.environ.get("TTT_LR", 0.002))
     ttt_epochs = int(os.environ.get("TTT_EPOCHS", 3))
     ttt_chunk_tokens = int(os.environ.get("TTT_CHUNK_TOKENS", 32768))
     ttt_freeze_blocks = int(os.environ.get("TTT_FREEZE_BLOCKS", 0))
@@ -1505,7 +1506,8 @@ def _rebank_state_dict(sd: dict[str, Tensor], num_layers: int, template_sd: dict
     return out
 
 def mixed_quantize_int6(state_dict: dict[str, Tensor], int6_cats: set[str],
-                        hessians: dict[str, Tensor] | None = None):
+                        hessians: dict[str, Tensor] | None = None,
+                        block_size: int = 128):
     """Quantize state dict with optional GPTQ ActOrder for int6 tensors.
     Uses 6-bit bitpacking (4 values → 3 bytes) for int6 tensors."""
     result: dict[str, Tensor] = {}
@@ -1524,7 +1526,7 @@ def mixed_quantize_int6(state_dict: dict[str, Tensor], int6_cats: set[str],
         if cat in int6_cats and t.ndim >= 1:
             H = hessians.get(name) if hessians else None
             if H is not None and t.ndim == 2:
-                q, s = quantize_gptq_actorder(t, H.cpu())
+                q, s = quantize_gptq_actorder(t, H.cpu(), block_size=block_size)
             else:
                 q, s = quantize_int6_per_row(t)
             # Bitpack: store 4 int6 values in 3 bytes
@@ -1992,7 +1994,7 @@ def main() -> None:
         )
         torch.cuda.synchronize()
         log0(f"gptq_actorder:hessians_done elapsed={1000*(time.perf_counter()-t_hess):.0f}ms layers={len(hessians)}")
-    quant_result, quant_meta = mixed_quantize_int6(unbanked_sd, {"mlp", "attn"}, hessians=hessians)
+    quant_result, quant_meta = mixed_quantize_int6(unbanked_sd, {"mlp", "attn"}, hessians=hessians, block_size=args.gptq_block_size)
     quant_buf = io.BytesIO()
     torch.save({"w": quant_result, "m": quant_meta}, quant_buf)
     quant_raw = quant_buf.getvalue()

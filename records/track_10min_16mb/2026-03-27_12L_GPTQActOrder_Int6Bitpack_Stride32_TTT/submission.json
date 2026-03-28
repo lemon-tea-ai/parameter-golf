@@ -1,8 +1,8 @@
 {
-  "name": "12L GPTQ-ActOrder + Int6 Bitpacking + Stride-32 + SGD TTT",
+  "name": "11L GPTQ-ActOrder + Int6 Bitpacking + Stride-32 SGD TTT",
   "val_bpb": null,
   "bytes_total": null,
-  "blurb": "Star 8: SGD TTT + GPTQ ActOrder + IZL + Int6 Bitpacking + Stride-32. 12 transformer layers (up from 11), GPTQ with Hessian-sorted column ordering (-0.002–0.004 BPB expected), 6-bit bitpacking (4 values→3 bytes, 25% smaller than int8), stride-32 sliding window eval, zstd-22 compression. All params unfrozen during TTT. Built on PR #414 stack with Parallel Muon (PR #393) and Legal Score-First TTT (PR #461).",
+  "blurb": "SGD TTT + GPTQ ActOrder + IZL + Int6 Bitpacking + Stride-32. 11 transformer layers, GPTQ with Hessian-sorted column ordering and block_size=256 (-0.003–0.004 BPB expected), 6-bit bitpacking (4 values→3 bytes, 25% smaller than int8), stride-32 TTT sliding window (vs SOTA stride-64, -0.001–0.002 BPB), TTT LR=0.002 matching proven SOTA recipe, zstd-22 compression. All params unfrozen during TTT. Built on PR #414 stack with Parallel Muon (PR #393) and Legal Score-First TTT (PR #461).",
   "author": "bochuandu",
   "github_id": "bochuandu",
   "date": "2026-03-27"
